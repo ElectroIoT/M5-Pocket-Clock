@@ -1,0 +1,13 @@
+{
+  "name": "M5 Pocket Clock (AtomS3)",
+  "version": "1.0.0",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "M5-Pocket-Clock-atoms3-v1.0.0-full.bin", "offset": 0 }
+      ]
+    }
+  ]
+}
