@@ -15,7 +15,7 @@
 #include <sys/time.h>
 #include <time.h>
 
-#define FW_VERSION "1.0.0"
+#define FW_VERSION "1.1.0"
 #define AP_NAME "ClockSetup"
 
 static const uint32_t SYNC_EVERY_MS = 6UL * 3600UL * 1000UL;  // resync every 6 hours
@@ -322,8 +322,8 @@ static void footerP(uint32_t now, bool withBattery) {
   cv.fillRect(42, y - 2, 2, 4, C_DIM);
   cv.fillRect(21, y - 4, (20 * bat) / 100, 8, col);
   char b[8];
-  snprintf(b, sizeof b, "%d%%", bat);
-  txt(b, 47, y, &fonts::Font2, C_DIM, textdatum_t::middle_left);
+  snprintf(b, sizeof b, "%d", bat);  // no % sign: "100%" would not fit the 80 px width
+  txt(b, 48, y, &fonts::Font2, C_DIM, textdatum_t::middle_left);
 }
 
 static void dateP(const tm& t, int y1, int y2) {
@@ -339,18 +339,18 @@ static void dateP(const tm& t, int y1, int y2) {
 static void faceDigitalP(const tm& t, uint32_t now) {
   int h12 = t.tm_hour % 12 == 0 ? 12 : t.tm_hour % 12;
   char b[8];
-  dateP(t, 12, 28);
+  dateP(t, 9, 23);
   snprintf(b, sizeof b, "%d", h12);
-  txt(b, W / 2, 62, &fonts::FreeSansBold24pt7b, C_TEXT);
+  txt(b, W / 2, 50, &fonts::FreeSansBold24pt7b, C_TEXT);
   snprintf(b, sizeof b, "%02d", t.tm_min);
-  txt(b, W / 2, 104, &fonts::FreeSansBold24pt7b, C_TEXT);
+  txt(b, W / 2, 98, &fonts::FreeSansBold24pt7b, C_TEXT);
   // seconds bar between hours and minutes
   float frac = (t.tm_sec + (now % 1000) / 1000.0f) / 60.0f;
-  cv.fillRoundRect(8, 80, W - 16, 4, 2, rgb(28, 34, 52));
-  cv.fillRoundRect(8, 80, (int)((W - 16) * frac) + 2, 4, 2, C_ACC);
-  txt(t.tm_hour < 12 ? "AM" : "PM", W / 2 - 14, 133, &fonts::FreeSansBold12pt7b, C_ACC);
+  cv.fillRoundRect(8, 69, W - 16, 3, 1, rgb(28, 34, 52));
+  cv.fillRoundRect(8, 69, (int)((W - 16) * frac) + 2, 3, 1, C_ACC);
+  txt(t.tm_hour < 12 ? "AM" : "PM", W / 2 - 14, 129, &fonts::FreeSansBold12pt7b, C_ACC);
   snprintf(b, sizeof b, ":%02d", t.tm_sec);
-  txt(b, W / 2 + 22, 135, &fonts::Font2, C_DIM);
+  txt(b, W / 2 + 22, 131, &fonts::Font2, C_DIM);
   footerP(now, true);
 }
 
@@ -381,11 +381,10 @@ static void faceNightP(const tm& t, uint32_t now) {
 static void screenSetupP(uint32_t now) {
   txt("SETUP", W / 2, 10, &fonts::FreeSansBold9pt7b, C_ACC);
   txt("Join Wi-Fi:", W / 2, 30, &fonts::Font2, C_TEXT);
-  txt(AP_NAME, W / 2, 52, &fonts::FreeSansBold9pt7b, C_WARN);
-  txt("Pick your", W / 2, 82, &fonts::Font2, C_TEXT);
-  txt("home Wi-Fi", W / 2, 98, &fonts::Font2, C_TEXT);
-  txt("then Save", W / 2, 114, &fonts::Font2, C_TEXT);
-  txt("page opens itself", W / 2, 143, &fonts::Font0, C_DIM);
+  txt(AP_NAME, W / 2, 54, &fonts::FreeSans9pt7b, C_WARN);
+  txt("Pick your", W / 2, 88, &fonts::Font2, C_TEXT);
+  txt("home Wi-Fi", W / 2, 106, &fonts::Font2, C_TEXT);
+  txt("then Save", W / 2, 124, &fonts::Font2, C_TEXT);
 }
 
 static void screenConnectingP(uint32_t now, const char* msg) {

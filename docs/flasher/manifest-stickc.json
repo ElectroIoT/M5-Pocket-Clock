@@ -1,0 +1,13 @@
+{
+  "name": "M5 Pocket Clock (M5StickC)",
+  "version": "1.1.0",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        { "path": "M5-Pocket-Clock-stickc-v1.1.0-full.bin", "offset": 0 }
+      ]
+    }
+  ]
+}

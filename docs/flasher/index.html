@@ -10,6 +10,7 @@
     body { margin: 0; font-family: system-ui, 'Segoe UI', sans-serif; background: var(--bg); color: var(--ink); }
     main { max-width: 720px; margin: auto; padding: 24px 16px 48px; }
     h1 { color: var(--blue); margin: 8px 0 4px; font-size: 34px; }
+    h2 { margin: 0 0 6px; font-size: 22px; }
     .card { background: var(--card); border-radius: 20px; padding: 20px; margin: 16px 0; }
     ol li { margin: 6px 0; }
     .muted { color: var(--soft); font-size: 14px; }
@@ -25,21 +26,40 @@
 <main>
   <img src="../images/banner.svg" alt="M5 Pocket Clock">
   <h1>Install in your browser</h1>
-  <p>Flash <b>Pocket Clock</b> onto an <b>M5Stack AtomS3</b> (the one with the display) straight from Chrome
-     or Edge on a computer - no tools to install.</p>
+  <p>Flash <b>Pocket Clock</b> from Chrome or Edge on a computer - no tools to install. Connect the device with a
+     USB <b>data</b> cable, press the Install button for your device and pick the serial port.</p>
+
   <div class="card">
-    <ol>
-      <li>Connect the AtomS3 with a USB-C <b>data</b> cable.</li>
-      <li>Press <b>Install</b> and choose the serial port ("USB JTAG/serial" or "USB Serial").</li>
-      <li>If no port shows: hold the AtomS3 button, plug in USB, release, and try again.</li>
-      <li>When it finishes, join the Wi-Fi <b>ClockSetup</b> on your phone and enter your home Wi-Fi.</li>
-    </ol>
-    <esp-web-install-button manifest="manifest.json">
-      <button slot="activate">Install Pocket Clock v1.0.0</button>
+    <h2>M5Stack AtomS3</h2>
+    <p class="muted">The AtomS3 with the display (not AtomS3 Lite). If no port shows: hold the AtomS3 button,
+       plug in USB, release, and try again.</p>
+    <esp-web-install-button manifest="manifest-atoms3.json">
+      <button slot="activate">Install on AtomS3 (v1.1.0)</button>
       <span slot="unsupported">Your browser does not support Web Serial. Use Chrome or Edge on a desktop computer.</span>
       <span slot="not-allowed">Web Serial needs HTTPS - open this page from GitHub Pages.</span>
     </esp-web-install-button>
-    <p class="muted">Controls: click = next face, hold 0.6 s = colour, hold 3 s = Wi-Fi setup.</p>
+  </div>
+
+  <div class="card">
+    <h2>M5StickC</h2>
+    <p class="muted">The original M5StickC (not Plus / Plus2). Switch it on first. If no port shows, install the
+       FTDI USB driver.</p>
+    <esp-web-install-button manifest="manifest-stickc.json">
+      <button slot="activate">Install on M5StickC (v1.1.0)</button>
+      <span slot="unsupported">Your browser does not support Web Serial. Use Chrome or Edge on a desktop computer.</span>
+      <span slot="not-allowed">Web Serial needs HTTPS - open this page from GitHub Pages.</span>
+    </esp-web-install-button>
+  </div>
+
+  <div class="card">
+    <b>After installing</b>
+    <ol>
+      <li>The screen shows <b>SETUP</b>. On your phone join the Wi-Fi <b>ClockSetup</b>.</li>
+      <li>Pick your home Wi-Fi, enter the password, press <b>Save</b>.</li>
+      <li>The clock shows the right time within seconds.</li>
+    </ol>
+    <p class="muted">A fresh install erases saved Wi-Fi. Controls: click = next face, hold 0.6 s = colour,
+       hold 3 s = Wi-Fi setup.</p>
   </div>
   <p class="muted">Other ways to install (esptool, PlatformIO, M5Burner): see the
     <a href="https://github.com/ElectroIoT/M5-Pocket-Clock/blob/main/docs/FLASHING.md">flashing guide</a>.</p>

@@ -2,8 +2,10 @@
 """Real screenshots from a connected M5 device over USB (firmware `shot` command).
 
   python tools/shot.py COM9 one out.png
-  python tools/shot.py COM9 gallery docs/screenshots
+  python tools/shot.py COM9 gallery docs/screenshots            (AtomS3, files like digital_am.png)
+  python tools/shot.py COM18 gallery docs/screenshots stickc_    (StickC, files like stickc_digital_am.png)
   python tools/shot.py COM9 tour docs/images/tour.gif
+  python tools/shot.py COM18 tour docs/images/tour_stickc.gif
 
 Needs: pip install pyserial pillow
 """
@@ -62,24 +64,28 @@ def grab(s):
 NAMES = ["digital", "ring", "night"]
 
 
-def gallery(s, outdir):
+def big(img):
+    return img.resize((img.width * 2, img.height * 2), Image.NEAREST)
+
+
+def gallery(s, outdir, prefix=""):
     cmd(s, "sync", 14.0)  # let a real sync finish so the status dot is the normal green one
     cmd(s, "theme 0")
     for fi, name in enumerate(NAMES):
         cmd(s, f"face {fi}")
         cmd(s, "settime 10 45 18", 0.6)  # a fixed, readable time (screenshots only)
-        grab(s).save(f"{outdir}/{name}_am.png")
+        grab(s).save(f"{outdir}/{prefix}{name}_am.png")
         cmd(s, "settime 15 7 42", 0.6)
-        grab(s).save(f"{outdir}/{name}_pm.png")
+        grab(s).save(f"{outdir}/{prefix}{name}_pm.png")
         print("saved", name)
     cmd(s, "face 0")
-    for ti in (1, 2, 5):
+    for ti in (1, 2, 5, 6, 7):
         cmd(s, f"theme {ti}")
         cmd(s, "settime 10 45 18", 0.6)
-        grab(s).save(f"{outdir}/theme{ti}.png")
+        grab(s).save(f"{outdir}/{prefix}theme{ti}.png")
     cmd(s, "theme 0")
     cmd(s, "portal", 4.0)  # the Wi-Fi setup screen (starts the real setup page)
-    grab(s).save(f"{outdir}/setup.png")
+    grab(s).save(f"{outdir}/{prefix}setup.png")
     cmd(s, "stop", 1.0)
     cmd(s, "sync", 0.1)  # put the real time back
     print("saved setup")
@@ -92,7 +98,7 @@ def tour(s, out):
         cmd(s, f"face {fi}")
         cmd(s, "settime 10 44 50", 0.3)
         for _ in range(26):  # ~13 seconds of real ticking, wrapping past 10:45
-            frames.append(grab(s).resize((256, 256), Image.NEAREST))
+            frames.append(big(grab(s)))
             time.sleep(0.25)
     cmd(s, "face 0")
     frames[0].save(out, save_all=True, append_images=frames[1:], duration=250, loop=0, optimize=True)
@@ -105,9 +111,9 @@ if __name__ == "__main__":
     ser = open_port(sys.argv[1])
     mode, target = sys.argv[2], sys.argv[3]
     if mode == "one":
-        grab(ser).resize((256, 256), Image.NEAREST).save(target)
+        big(grab(ser)).save(target)
     elif mode == "gallery":
-        gallery(ser, target)
+        gallery(ser, target, sys.argv[4] if len(sys.argv) > 4 else "")
     elif mode == "tour":
         tour(ser, target)
     else:

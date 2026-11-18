@@ -2,7 +2,7 @@
   <rect width="1280" height="320" rx="24" fill="#0c0c18"/>
   <text x="56" y="132" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="64" font-weight="800" fill="#f1f4ff">Pocket Clock</text>
   <text x="58" y="178" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="26" fill="#8c98b8">A 12-hour clock that sets itself - Wi-Fi once, then forget it.</text>
-  <text x="58" y="226" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" fill="#50c8ff">M5Stack AtomS3  &#183;  AM/PM  &#183;  date  &#183;  auto timezone  &#183;  3 faces</text>
+  <text x="58" y="226" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" fill="#50c8ff">AtomS3 + M5StickC  &#183;  AM/PM  &#183;  date  &#183;  auto timezone  &#183;  8 colours</text>
   <g transform="translate(800 36)">
     <rect x="0" y="0" width="248" height="248" rx="20" fill="#050810" stroke="#28304a" stroke-width="4"/>
     <text x="124" y="46" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="26" fill="#78849f">WED 18 NOV</text>
