@@ -8,7 +8,7 @@ Everything is in [`src/main.cpp`](../src/main.cpp).
    `ClockSetup`. The page also has two options: *UTC offset* and *auto timezone* (1 = on).
 2. **Sync** - a background task joins your Wi-Fi, finds the timezone, asks NTP servers
    (`pool.ntp.org`, `time.google.com`, `time.cloudflare.com`) for the time, then switches Wi-Fi off.
-3. **Keeping time** - the ESP32 keeps the system time between syncs (a few seconds of drift per day).
+3. **Keeping time** - the ESP32 keeps the system time between syncs.
    It re-syncs every **6 hours**, or **10 minutes** after a failure.
 4. **Power cut** - the AtomS3 has no battery, so after a power cut it shows "connecting..." for a few
    seconds until it syncs again. The **M5StickC** has a battery-backed RTC chip (BM8563): after every good
