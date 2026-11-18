@@ -34,7 +34,9 @@ static bool autoTz = true;
 static int tzSec = 0;          // current total offset incl. DST, seconds
 enum { FACES = 3 };
 static const uint8_t THEMES[][3] = {{80, 200, 255}, {255, 205, 70}, {255, 120, 170},
-                                    {120, 230, 130}, {255, 150, 80}, {180, 140, 255}};
+                                    {120, 230, 130}, {255, 150, 80}, {180, 140, 255},
+                                    {255, 205, 160},   // light orange (peach)
+                                    {170, 90, 255}};   // purple
 static const int NUM_THEMES = sizeof(THEMES) / sizeof(THEMES[0]);
 
 // ---- network state (written by the net task, read by the UI) ----------------
@@ -51,6 +53,38 @@ static uint8_t curBright = 0;
 static bool shotRequested = false;
 static char toast[24] = "";
 static float pax = 0, pay = 0, paz = 1;
+static bool PORTRAIT = false;          // tall narrow screen (StickC 80x160)
+static bool rtcTime = false;           // time came from the battery-backed RTC (StickC)
+static volatile bool rtcSavePending = false;
+
+// seconds since 1970 for a civil UTC date
+static time_t epochUtc(int y, int mo, int d, int h, int mi, int sec) {
+  y -= mo <= 2;
+  long era = (y >= 0 ? y : y - 399) / 400;
+  unsigned yoe = (unsigned)(y - era * 400);
+  unsigned doy = (153 * (mo + (mo > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+  unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  long days = era * 146097 + (long)doe - 719468;
+  return (time_t)(days * 86400L + h * 3600L + mi * 60L + sec);
+}
+
+static void loadRtc() {  // M5StickC has a battery-backed RTC: use it so the time survives power cuts
+  if (!M5.Rtc.isEnabled()) return;
+  auto dt = M5.Rtc.getDateTime();
+  if (dt.date.year >= 2024) {
+    timeval tv = {epochUtc(dt.date.year, dt.date.month, dt.date.date, dt.time.hours, dt.time.minutes, dt.time.seconds), 0};
+    settimeofday(&tv, nullptr);
+    rtcTime = true;
+  }
+}
+
+static void saveRtc() {  // store UTC after a good sync
+  if (!M5.Rtc.isEnabled()) return;
+  time_t n = time(nullptr);
+  tm g;
+  gmtime_r(&n, &g);
+  M5.Rtc.setDateTime(&g);
+}
 
 static inline uint16_t rgb(int r, int g, int b) { return cv.color565(r, g, b); }
 
@@ -139,6 +173,7 @@ static void doSync() {
   if (ntpSync()) {
     applyTz();
     everSynced = true;
+    rtcSavePending = true;
     lastSyncMs = millis();
     netState = NET_IDLE;
   } else {
@@ -201,12 +236,18 @@ static void netTask(void*) {
 }
 
 // ---- drawing helpers ---------------------------------------------------------
-static const lgfx::IFont* BOLD[] = {&fonts::FreeSansBold24pt7b, &fonts::FreeSansBold18pt7b, &fonts::FreeSansBold12pt7b};
+static const lgfx::IFont* BOLD[] = {&fonts::FreeSansBold24pt7b, &fonts::FreeSansBold18pt7b, &fonts::FreeSansBold12pt7b,
+                                    &fonts::FreeSansBold9pt7b};
 
 static void txt(const char* s, int x, int y, const lgfx::IFont* f, uint16_t col,
                 textdatum_t d = textdatum_t::middle_center) {
+  cv.setTextSize(1);
   cv.setFont(f);
-  if (cv.textWidth(s) > W - 4) cv.setFont(&fonts::Font0);  // too wide: use the small font
+  int tw = cv.textWidth(s);
+  if (tw > W - 4) {
+    if (W < 100) cv.setTextSize((float)(W - 4) / tw);  // narrow screen: shrink to fit
+    else cv.setFont(&fonts::Font0);                    // too wide: use the small font
+  }
   if (d == textdatum_t::middle_center) {  // centre by hand (bitmap fonts centre wrongly)
     x -= cv.textWidth(s) / 2;
     d = textdatum_t::middle_left;
@@ -214,6 +255,7 @@ static void txt(const char* s, int x, int y, const lgfx::IFont* f, uint16_t col,
   cv.setTextDatum(d);
   cv.setTextColor(col);
   cv.drawString(s, x, y);
+  cv.setTextSize(1);
 }
 
 static const lgfx::IFont* fit(const char* s, int maxW) {
@@ -221,7 +263,7 @@ static const lgfx::IFont* fit(const char* s, int maxW) {
     cv.setFont(f);
     if (cv.textWidth(s) <= maxW) return f;
   }
-  return BOLD[2];
+  return BOLD[3];
 }
 
 // hh:mm with a blinking colon, centred on (cx, cy)
@@ -251,6 +293,7 @@ static void statusRow(uint32_t now) {
   char b[16];
   bool busy = netState == NET_CONNECTING || netState == NET_SYNCING;
   if (busy) { dot = ((now / 400) % 2) ? C_WARN : C_DIM; label = "syncing"; }
+  else if (!everSynced && rtcTime) { dot = C_WARN; label = "rtc time"; }
   else if (!everSynced) { dot = C_BAD; label = "no sync"; }
   else if (now - lastSyncMs > 12UL * 3600UL * 1000UL) { dot = C_WARN; label = "old sync"; }
   else { dot = C_GOOD; tzLabel(b, sizeof b); label = b; }
@@ -259,6 +302,102 @@ static void statusRow(uint32_t now) {
 }
 
 // ---- watch faces ---------------------------------------------------------------
+// ---- portrait (StickC 80x160) helpers and faces --------------------------------
+static void footerP(uint32_t now, bool withBattery) {
+  const int y = H - 9;
+  bool busy = netState == NET_CONNECTING || netState == NET_SYNCING;
+  uint16_t dot;
+  if (busy) dot = ((now / 400) % 2) ? C_WARN : C_DIM;
+  else if (!everSynced) dot = rtcTime ? C_WARN : C_BAD;
+  else if (now - lastSyncMs > 12UL * 3600UL * 1000UL) dot = C_WARN;
+  else dot = C_GOOD;
+  cv.fillCircle(8, y, 3, dot);
+  if (!withBattery) return;
+  int bat = M5.Power.getBatteryLevel();
+  if (bat < 0) bat = 0;
+  if (bat > 100) bat = 100;
+  bool chg = M5.Power.isCharging() == m5::Power_Class::is_charging;
+  uint16_t col = chg ? C_GOOD : (bat > 20 ? C_TEXT : C_BAD);
+  cv.drawRect(20, y - 5, 22, 10, C_DIM);
+  cv.fillRect(42, y - 2, 2, 4, C_DIM);
+  cv.fillRect(21, y - 4, (20 * bat) / 100, 8, col);
+  char b[8];
+  snprintf(b, sizeof b, "%d%%", bat);
+  txt(b, 47, y, &fonts::Font2, C_DIM, textdatum_t::middle_left);
+}
+
+static void dateP(const tm& t, int y1, int y2) {
+  char b[16];
+  strftime(b, sizeof b, "%a %d", &t);
+  for (char* p = b; *p; ++p) *p = toupper(*p);
+  txt(b, W / 2, y1, &fonts::FreeSans9pt7b, C_DIM);
+  strftime(b, sizeof b, "%b", &t);
+  for (char* p = b; *p; ++p) *p = toupper(*p);
+  txt(b, W / 2, y2, &fonts::FreeSans9pt7b, C_DIM);
+}
+
+static void faceDigitalP(const tm& t, uint32_t now) {
+  int h12 = t.tm_hour % 12 == 0 ? 12 : t.tm_hour % 12;
+  char b[8];
+  dateP(t, 12, 28);
+  snprintf(b, sizeof b, "%d", h12);
+  txt(b, W / 2, 62, &fonts::FreeSansBold24pt7b, C_TEXT);
+  snprintf(b, sizeof b, "%02d", t.tm_min);
+  txt(b, W / 2, 104, &fonts::FreeSansBold24pt7b, C_TEXT);
+  // seconds bar between hours and minutes
+  float frac = (t.tm_sec + (now % 1000) / 1000.0f) / 60.0f;
+  cv.fillRoundRect(8, 80, W - 16, 4, 2, rgb(28, 34, 52));
+  cv.fillRoundRect(8, 80, (int)((W - 16) * frac) + 2, 4, 2, C_ACC);
+  txt(t.tm_hour < 12 ? "AM" : "PM", W / 2 - 14, 133, &fonts::FreeSansBold12pt7b, C_ACC);
+  snprintf(b, sizeof b, ":%02d", t.tm_sec);
+  txt(b, W / 2 + 22, 135, &fonts::Font2, C_DIM);
+  footerP(now, true);
+}
+
+static void faceRingP(const tm& t, uint32_t now) {
+  int h12 = t.tm_hour % 12 == 0 ? 12 : t.tm_hour % 12;
+  const int cx = W / 2, cy = 46;
+  cv.fillArc(cx, cy, 32, 38, 0, 360, rgb(28, 34, 52));
+  float frac = (t.tm_sec + (now % 1000) / 1000.0f) / 60.0f;
+  if (frac > 0.003f) cv.fillArc(cx, cy, 32, 38, 270, 270 + 360 * frac, C_ACC);
+  bigTime(cx, cy - 6, 52, h12, t.tm_min, t.tm_sec % 2 == 0, C_TEXT, C_ACC);
+  txt(t.tm_hour < 12 ? "AM" : "PM", cx, cy + 12, &fonts::FreeSansBold9pt7b, C_ACC);
+  dateP(t, 104, 122);
+  footerP(now, true);
+}
+
+static void faceNightP(const tm& t, uint32_t now) {
+  int h12 = t.tm_hour % 12 == 0 ? 12 : t.tm_hour % 12;
+  const uint8_t* c = THEMES[theme];
+  uint16_t dim = rgb(c[0] * 55 / 100, c[1] * 55 / 100, c[2] * 55 / 100);
+  char b[8];
+  snprintf(b, sizeof b, "%d", h12);
+  txt(b, W / 2, 58, &fonts::FreeSansBold24pt7b, dim);
+  snprintf(b, sizeof b, "%02d", t.tm_min);
+  txt(b, W / 2, 100, &fonts::FreeSansBold24pt7b, dim);
+  txt(t.tm_hour < 12 ? "AM" : "PM", W / 2, 132, &fonts::FreeSansBold12pt7b, dim);
+}
+
+static void screenSetupP(uint32_t now) {
+  txt("SETUP", W / 2, 10, &fonts::FreeSansBold9pt7b, C_ACC);
+  txt("Join Wi-Fi:", W / 2, 30, &fonts::Font2, C_TEXT);
+  txt(AP_NAME, W / 2, 52, &fonts::FreeSansBold9pt7b, C_WARN);
+  txt("Pick your", W / 2, 82, &fonts::Font2, C_TEXT);
+  txt("home Wi-Fi", W / 2, 98, &fonts::Font2, C_TEXT);
+  txt("then Save", W / 2, 114, &fonts::Font2, C_TEXT);
+  txt("page opens itself", W / 2, 143, &fonts::Font0, C_DIM);
+}
+
+static void screenConnectingP(uint32_t now, const char* msg) {
+  for (int i = 0; i < 8; i++) {
+    float a = now * 0.006f - i * 0.4f;
+    cv.fillCircle(W / 2 + (int)(cosf(a) * 20), 46 + (int)(sinf(a) * 20), 5 - i / 2, C_ACC);
+  }
+  txt("POCKET", W / 2, 92, &fonts::Font2, C_TEXT);
+  txt("CLOCK", W / 2, 108, &fonts::Font2, C_TEXT);
+  txt(msg, W / 2, 134, &fonts::Font2, C_DIM);
+}
+
 static void faceDigital(const tm& t, uint32_t now) {
   int h12 = t.tm_hour % 12 == 0 ? 12 : t.tm_hour % 12;
   char b[24];
@@ -320,10 +459,16 @@ static void draw(uint32_t now) {
   localtime_r(&tt, &t);
 
   if (netState == NET_PORTAL) {
-    screenSetup(now);
+    if (PORTRAIT) screenSetupP(now);
+    else screenSetup(now);
   } else if (!timeValid()) {
     const char* m = netState == NET_FAILED ? "no Wi-Fi" : (netState == NET_SYNCING ? "syncing..." : "connecting...");
-    screenConnecting(now, m);
+    if (PORTRAIT) screenConnectingP(now, m);
+    else screenConnecting(now, m);
+  } else if (PORTRAIT) {
+    if (face == 1) faceRingP(t, now);
+    else if (face == 2) faceNightP(t, now);
+    else faceDigitalP(t, now);
   } else {
     if (face == 1) faceRing(t, now);
     else if (face == 2) faceNight(t, now);
@@ -332,13 +477,15 @@ static void draw(uint32_t now) {
   }
 
   if (M5.BtnA.isPressed()) {
-    if (M5.BtnA.pressedFor(3000)) txt("release: Wi-Fi setup", W / 2, 118, &fonts::Font0, C_WARN);
-    else if (M5.BtnA.pressedFor(600)) txt("release: new colour", W / 2, 118, &fonts::Font0, C_GOOD);
+    int hy = PORTRAIT ? H - 22 : 118;
+    if (M5.BtnA.pressedFor(3000)) txt("release: Wi-Fi setup", W / 2, hy, &fonts::Font0, C_WARN);
+    else if (M5.BtnA.pressedFor(600)) txt("release: new colour", W / 2, hy, &fonts::Font0, C_GOOD);
   }
   if (now < toastUntil) {
-    cv.fillRoundRect(14, 50, 100, 26, 6, rgb(20, 24, 40));
-    cv.drawRoundRect(14, 50, 100, 26, 6, C_GOOD);
-    txt(toast, W / 2, 63, &fonts::Font2, C_TEXT);
+    int bw = W < 100 ? W - 8 : 100, bx = (W - bw) / 2, by = H / 2 - 13;
+    cv.fillRoundRect(bx, by, bw, 26, 6, rgb(20, 24, 40));
+    cv.drawRoundRect(bx, by, bw, 26, 6, C_GOOD);
+    txt(toast, W / 2, by + 13, &fonts::Font2, C_TEXT);
   }
   cv.pushSprite(0, 0);
 }
@@ -388,7 +535,7 @@ static void runCommand(char* cmd) {
   else if (!strcmp(cmd, "stop")) portalStop = true;
   else if (!strcmp(cmd, "wifireset")) { wifiResetWanted = true; portalWanted = true; }
   else if (!strcmp(cmd, "shot")) shotRequested = true;
-  else Serial.println("commands: ver | face 0-2 | theme 0-5 | settime H M S | sync | portal | stop | wifireset | shot");
+  else Serial.println("commands: ver | face 0-2 | theme 0-7 | settime H M S | sync | portal | stop | wifireset | shot");
 }
 
 static void pollSerial() {
@@ -425,8 +572,10 @@ void setup() {
   M5.begin(cfg);
   Serial.begin(115200);
   M5.Display.setRotation(0);
+  if (M5.Display.width() > M5.Display.height()) M5.Display.setRotation(1);  // want portrait on the StickC
   W = M5.Display.width();
   H = M5.Display.height();
+  PORTRAIT = H > W * 13 / 10;
   cv.setColorDepth(16);
   cv.createSprite(W, H);
   C_BG = rgb(6, 8, 16);
@@ -442,6 +591,7 @@ void setup() {
   autoTz = prefs.getBool("auto", true);
   tzSec = prefs.getInt("tzsec", (int)(tzHours * 3600));
   applyTz();
+  loadRtc();
   curBright = BRIGHT_DAY;
   M5.Display.setBrightness(curBright);
   Serial.printf("Pocket Clock %s, screen %dx%d\n", FW_VERSION, W, H);
@@ -459,12 +609,16 @@ void loop() {
   } else if (M5.BtnA.wasReleaseFor(600)) {
     theme = (theme + 1) % NUM_THEMES;
     saveCfg();
+  } else if (M5.BtnB.wasClicked()) {
+    theme = (theme + 1) % NUM_THEMES;
+    saveCfg();
   } else if (M5.BtnA.wasClicked()) {
     if (netState == NET_PORTAL) portalStop = true;
     else { face = (face + 1) % FACES; saveCfg(); }
   }
 
   pollSerial();
+  if (rtcSavePending) { rtcSavePending = false; saveRtc(); }
   if (now - lastFrame < 33) return;
   lastFrame = now;
   readMotion(now);
